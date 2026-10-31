@@ -1,6 +1,7 @@
 // 待辦清單使用原生 JavaScript，並以 localStorage 保存資料。
 const STORAGE_KEY = 'todo-list-items';
 const THEME_STORAGE_KEY = 'todo-list-theme';
+const FILTER_STORAGE_KEY = 'todo-list-filter';
 
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
@@ -12,8 +13,19 @@ const filterButtons = document.querySelectorAll('.btn-filter');
 const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
 
 let todos = loadTodos();
-let activeFilter = 'all';
+let activeFilter = loadSavedFilter();
 let savedTheme = loadSavedTheme();
+
+// 僅接受支援的篩選值，避免無效資料造成清單顯示錯誤。
+function loadSavedFilter() {
+  try {
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    return ['all', 'active', 'completed'].includes(saved) ? saved : 'all';
+  } catch (error) {
+    console.error('讀取篩選設定失敗。', error);
+    return 'all';
+  }
+}
 
 // 使用手動選擇的主題，否則依照作業系統的外觀設定。
 function loadSavedTheme() {
@@ -160,6 +172,11 @@ form.addEventListener('submit', (event) => {
 filterButtons.forEach((button) => {
   button.addEventListener('click', () => {
     activeFilter = button.dataset.filter;
+    try {
+      localStorage.setItem(FILTER_STORAGE_KEY, activeFilter);
+    } catch (error) {
+      console.error('儲存篩選設定失敗。', error);
+    }
     render();
   });
 });
