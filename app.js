@@ -1,13 +1,55 @@
 // 待辦清單使用原生 JavaScript，並以 localStorage 保存資料。
 const STORAGE_KEY = 'todo-list-items';
+const THEME_STORAGE_KEY = 'todo-list-theme';
 
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
 const list = document.getElementById('todo-list');
 const emptyState = document.getElementById('empty-state');
 const remainingCount = document.getElementById('remaining-count');
+const themeToggle = document.getElementById('theme-toggle');
+const filterButtons = document.querySelectorAll('.btn-filter');
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
 
 let todos = loadTodos();
+let activeFilter = 'all';
+let savedTheme = loadSavedTheme();
+
+// 使用手動選擇的主題，否則依照作業系統的外觀設定。
+function loadSavedTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    return saved === 'light' || saved === 'dark' ? saved : null;
+  } catch (error) {
+    console.error('讀取主題設定失敗。', error);
+    return null;
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const isDark = theme === 'dark';
+  themeToggle.textContent = isDark ? '☀️ 淺色模式' : '🌙 深色模式';
+  themeToggle.setAttribute('aria-pressed', String(isDark));
+}
+
+applyTheme(savedTheme || (systemTheme.matches ? 'dark' : 'light'));
+
+themeToggle.addEventListener('click', () => {
+  savedTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, savedTheme);
+  } catch (error) {
+    console.error('儲存主題設定失敗。', error);
+  }
+  applyTheme(savedTheme);
+});
+
+systemTheme.addEventListener('change', (event) => {
+  if (!savedTheme) {
+    applyTheme(event.matches ? 'dark' : 'light');
+  }
+});
 
 // 從瀏覽器讀取資料，並排除格式不正確的項目。
 function loadTodos() {
@@ -36,11 +78,21 @@ function saveTodos() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
 }
 
-// 依照資料重新繪製清單與未完成數量。
+// 依照目前篩選條件繪製清單，並更新整份清單的未完成數量。
 function render() {
   list.replaceChildren();
 
-  todos.forEach((todo) => {
+  const visibleTodos = todos.filter((todo) => {
+    if (activeFilter === 'active') {
+      return !todo.completed;
+    }
+    if (activeFilter === 'completed') {
+      return todo.completed;
+    }
+    return true;
+  });
+
+  visibleTodos.forEach((todo) => {
     const item = document.createElement('li');
     item.className = todo.completed ? 'todo-item completed' : 'todo-item';
     item.dataset.id = todo.id;
@@ -65,7 +117,23 @@ function render() {
     list.append(item);
   });
 
-  emptyState.hidden = todos.length > 0;
+  emptyState.hidden = visibleTodos.length > 0;
+  if (todos.length === 0) {
+    emptyState.textContent = '還沒有任何待辦事項,新增一個吧!';
+  } else if (activeFilter === 'active') {
+    emptyState.textContent = '目前沒有未完成的待辦事項。';
+  } else if (activeFilter === 'completed') {
+    emptyState.textContent = '目前沒有已完成的待辦事項。';
+  } else {
+    emptyState.textContent = '還沒有任何待辦事項,新增一個吧!';
+  }
+
+  filterButtons.forEach((button) => {
+    const isActive = button.dataset.filter === activeFilter;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+  });
+
   remainingCount.textContent = `未完成:${todos.filter((todo) => !todo.completed).length} 項`;
 }
 
@@ -87,6 +155,13 @@ form.addEventListener('submit', (event) => {
   render();
   input.value = '';
   input.focus();
+});
+
+filterButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    activeFilter = button.dataset.filter;
+    render();
+  });
 });
 
 list.addEventListener('change', (event) => {
